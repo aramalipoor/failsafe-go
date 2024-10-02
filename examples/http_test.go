@@ -137,8 +137,9 @@ func TestHttpWithHedgePolicy(t *testing.T) {
 	// Create a HedgePolicy that sends up to 2 hedges after a 1 second delay each
 	hedgePolicy := hedgepolicy.BuilderWithDelay[*http.Response](time.Second).
 		WithMaxHedges(2).
-		OnHedge(func(f failsafe.ExecutionEvent[*http.Response]) {
+		OnHedge(func(f failsafe.ExecutionEvent[*http.Response]) bool {
 			fmt.Println("Sending hedged ping")
+			return true
 		}).
 		Build()
 

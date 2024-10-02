@@ -27,34 +27,42 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 		executions := make([]policy.ExecutionInternal[R], e.maxHedges+1)
 
 		// Guard against a race between execution results
+		maxHedges := atomic.Int32{}
+		maxHedges.Store(int32(e.maxHedges))
 		resultCount := atomic.Int32{}
 		resultSent := atomic.Bool{}
 		resultChan := make(chan *execResult, 1) // Only one result is sent
 
 		for execIdx := 0; ; execIdx++ {
+			shouldSkip := false
 			// Prepare execution
 			if execIdx == 0 {
 				executions[execIdx] = parentExecution.CopyForCancellable().(policy.ExecutionInternal[R])
 			} else {
 				executions[execIdx] = parentExecution.CopyForHedge().(policy.ExecutionInternal[R])
 				if e.onHedge != nil {
-					e.onHedge(failsafe.ExecutionEvent[R]{ExecutionAttempt: executions[execIdx].CopyWithResult(nil)})
+					if !e.onHedge(failsafe.ExecutionEvent[R]{ExecutionAttempt: executions[execIdx].CopyWithResult(nil)}) {
+						shouldSkip = true
+						maxHedges.Store(int32(execIdx - 1))
+					}
 				}
 			}
 
-			// Perform execution
-			go func(hedgeExec policy.ExecutionInternal[R], execIdx int) {
-				result := innerFn(hedgeExec)
-				isFinalResult := int(resultCount.Add(1)) == e.maxHedges+1
-				isCancellable := e.IsAbortable(result.Result, result.Error)
-				if (isFinalResult || isCancellable) && resultSent.CompareAndSwap(false, true) {
-					resultChan <- &execResult{result, execIdx}
-				}
-			}(executions[execIdx], execIdx)
+			if !shouldSkip {
+				// Perform execution
+				go func(hedgeExec policy.ExecutionInternal[R], execIdx int) {
+					result := innerFn(hedgeExec)
+					isFinalResult := int(resultCount.Add(1)) == int(maxHedges.Load())+1
+					isCancellable := e.IsAbortable(result.Result, result.Error)
+					if (isFinalResult || isCancellable) && resultSent.CompareAndSwap(false, true) {
+						resultChan <- &execResult{result, execIdx}
+					}
+				}(executions[execIdx], execIdx)
+			}
 
 			// Wait for result or hedge delay
 			var result *execResult
-			if execIdx < e.maxHedges {
+			if !shouldSkip && execIdx < int(maxHedges.Load()) {
 				timer := time.NewTimer(e.delayFunc(exec))
 				select {
 				case <-timer.C:

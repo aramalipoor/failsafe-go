@@ -564,8 +564,9 @@ func registerBhListeners[R any](stats *listenerStats, bhBuilder bulkhead.Bulkhea
 }
 
 func registerHpListeners[R any](stats *listenerStats, hpBuilder hedgepolicy.HedgePolicyBuilder[R]) {
-	hpBuilder.OnHedge(func(f failsafe.ExecutionEvent[R]) {
+	hpBuilder.OnHedge(func(f failsafe.ExecutionEvent[R]) bool {
 		stats.hpHedge++
+		return true
 	})
 }
 

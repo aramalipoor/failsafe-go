@@ -43,7 +43,7 @@ type HedgePolicyBuilder[R any] interface {
 	CancelIf(predicate func(R, error) bool) HedgePolicyBuilder[R]
 
 	// OnHedge registers the listener to be called when a hedge is about to be attempted.
-	OnHedge(listener func(failsafe.ExecutionEvent[R])) HedgePolicyBuilder[R]
+	OnHedge(listener func(failsafe.ExecutionEvent[R]) bool) HedgePolicyBuilder[R]
 
 	// WithMaxHedges sets the max number of hedges to perform when an execution attempt doesn't complete in time, which is 1
 	// by default.
@@ -58,7 +58,7 @@ type config[R any] struct {
 
 	delayFunc failsafe.DelayFunc[R]
 	maxHedges int
-	onHedge   func(failsafe.ExecutionEvent[R])
+	onHedge   func(failsafe.ExecutionEvent[R]) bool
 }
 
 var _ HedgePolicyBuilder[any] = &config[any]{}
@@ -135,7 +135,7 @@ func (c *config[R]) CancelIf(predicate func(R, error) bool) HedgePolicyBuilder[R
 	return c
 }
 
-func (c *config[R]) OnHedge(listener func(failsafe.ExecutionEvent[R])) HedgePolicyBuilder[R] {
+func (c *config[R]) OnHedge(listener func(failsafe.ExecutionEvent[R]) bool) HedgePolicyBuilder[R] {
 	c.onHedge = listener
 	return c
 }

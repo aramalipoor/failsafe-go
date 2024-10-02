@@ -111,9 +111,10 @@ func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stat
 }
 
 func WithHedgeStatsAndLogs[R any](hp hedgepolicy.HedgePolicyBuilder[R], stats *Stats) hedgepolicy.HedgePolicyBuilder[R] {
-	hp.OnHedge(func(e failsafe.ExecutionEvent[R]) {
+	hp.OnHedge(func(e failsafe.ExecutionEvent[R]) bool {
 		stats.hedges.Add(1)
 		fmt.Printf("hedge %p starting [attempts: %v]\n", hp, e.Attempts())
+		return true
 	})
 	return hp
 }
