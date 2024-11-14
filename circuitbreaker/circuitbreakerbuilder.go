@@ -17,7 +17,7 @@ CircuitBreakerBuilder builds CircuitBreaker instances.
     HandleResultIf will not replace the default error handling condition.
   - If multiple handle conditions are specified, any condition that matches an execution result or error will trigger policy handling.
 
-This type is not concurrency safe.
+R is the execution result type. This type is not concurrency safe.
 */
 type CircuitBreakerBuilder[R any] interface {
 	failsafe.FailurePolicyBuilder[CircuitBreakerBuilder[R], R]
@@ -63,7 +63,7 @@ type CircuitBreakerBuilder[R any] interface {
 	// before the circuit will be opened.
 	//
 	// If WithSuccessThreshold is not configured, the failureExecutionThreshold will also be used when the circuit breaker is
-	// in a HalfOpenSttate state to determine whether to transition back to open or closed.
+	// in a HalfOpenState state to determine whether to transition back to open or closed.
 	WithFailureRateThreshold(failureRateThreshold uint, failureExecutionThreshold uint, failureThresholdingPeriod time.Duration) CircuitBreakerBuilder[R]
 
 	// WithDelay configures the delay to wait in OpenState before transitioning to HalfOpenState.
