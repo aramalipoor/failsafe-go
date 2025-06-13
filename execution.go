@@ -257,6 +257,12 @@ func (e *execution[R]) CopyForCancellable() Execution[R] {
 	return c
 }
 
+func (e *execution[R]) CopyForCancellableWithValue(key, value any) Execution[R] {
+	c := e.copy()
+	c.ctx, c.cancelFunc = context.WithCancel(context.WithValue(c.ctx, key, value))
+	return c
+}
+
 func (e *execution[R]) CopyForHedge() Execution[R] {
 	c := e.copy()
 	c.isHedge = true

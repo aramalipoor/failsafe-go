@@ -32,4 +32,8 @@ type ExecutionInternal[R any] interface {
 
 	// CopyForHedge creates a copy of the execution marked as a hedge.
 	CopyForHedge() failsafe.Execution[R]
+
+	// CopyForCancellableWithValue creates a cancellable child copy of the execution based on the current execution's context,
+	// with the given key and value added to the context.
+	CopyForCancellableWithValue(key, value any) failsafe.Execution[R]
 }
