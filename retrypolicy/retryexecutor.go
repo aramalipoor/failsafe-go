@@ -2,6 +2,7 @@ package retrypolicy
 
 import (
 	"math/rand"
+	"sync/atomic"
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
@@ -17,9 +18,9 @@ type executor[R any] struct {
 	*retryPolicy[R]
 
 	// Mutable state
-	failedAttempts  int
-	retriesExceeded bool
-	lastDelay       time.Duration // The last backoff delay time
+	failedAttempts  atomic.Int32
+	retriesExceeded atomic.Bool
+	lastDelay       atomic.Int64 // Store as nanoseconds
 }
 
 var _ policy.Executor[any] = &executor[any]{}
@@ -33,7 +34,7 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 			if canceled, cancelResult := execInternal.IsCanceledWithResult(); canceled {
 				return cancelResult
 			}
-			if e.retriesExceeded {
+			if e.retriesExceeded.Load() {
 				return result
 			}
 
@@ -79,19 +80,19 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 func (e *executor[R]) OnFailure(exec policy.ExecutionInternal[R], result *common.PolicyResult[R]) *common.PolicyResult[R] {
 	e.BaseExecutor.OnFailure(exec, result)
 
-	e.failedAttempts++
-	maxRetriesExceeded := e.maxRetries != -1 && e.failedAttempts > e.maxRetries
+	e.failedAttempts.Add(1)
+	maxRetriesExceeded := e.maxRetries != -1 && e.failedAttempts.Load() > int32(e.maxRetries)
 	maxDurationExceeded := e.maxDuration != 0 && exec.ElapsedTime() > e.maxDuration
-	e.retriesExceeded = maxRetriesExceeded || maxDurationExceeded
+	e.retriesExceeded.Store(maxRetriesExceeded || maxDurationExceeded)
 	isAbortable := e.IsAbortable(result.Result, result.Error)
-	shouldRetry := !isAbortable && !e.retriesExceeded && e.allowsRetries()
+	shouldRetry := !isAbortable && !e.retriesExceeded.Load() && e.allowsRetries()
 	done := isAbortable || !shouldRetry
 
 	// Call listeners
 	if isAbortable && e.onAbort != nil {
 		e.onAbort(failsafe.ExecutionEvent[R]{ExecutionAttempt: exec.CopyWithResult(result)})
 	}
-	if e.retriesExceeded {
+	if e.retriesExceeded.Load() {
 		if !isAbortable && e.onRetriesExceeded != nil {
 			e.onRetriesExceeded(failsafe.ExecutionEvent[R]{ExecutionAttempt: exec.CopyWithResult(result)})
 		}
@@ -123,13 +124,14 @@ func (e *executor[R]) getDelay(exec failsafe.ExecutionAttempt[R]) time.Duration 
 func (e *executor[R]) getFixedOrRandomDelay(exec failsafe.ExecutionAttempt[R]) time.Duration {
 	if e.Delay != 0 {
 		// Adjust for backoffs
-		if e.lastDelay != 0 && exec.Retries() >= 1 && e.maxDelay != 0 {
-			backoffDelay := time.Duration(float32(e.lastDelay) * e.delayFactor)
-			e.lastDelay = min(backoffDelay, e.maxDelay)
+		ld := e.lastDelay.Load()
+		if ld != 0 && exec.Retries() >= 1 && e.maxDelay != 0 {
+			backoffDelay := time.Duration(float32(ld) * e.delayFactor)
+			e.lastDelay.Store(int64(min(backoffDelay, e.maxDelay)))
 		} else {
-			e.lastDelay = e.Delay
+			e.lastDelay.Store(int64(e.Delay))
 		}
-		return e.lastDelay
+		return time.Duration(e.lastDelay.Load())
 	}
 	if e.delayMin != 0 && e.delayMax != 0 {
 		return time.Duration(util.RandomDelayInRange(e.delayMin.Nanoseconds(), e.delayMax.Nanoseconds(), rand.Float64()))
