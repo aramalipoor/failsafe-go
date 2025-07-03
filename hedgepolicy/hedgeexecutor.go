@@ -53,7 +53,7 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 				go func(hedgeExec policy.ExecutionInternal[R], execIdx int) {
 					result := innerFn(hedgeExec)
 					isFinalResult := int(resultCount.Add(1)) == int(maxHedges.Load())+1
-					isCancellable := e.IsAbortable(result.Result, result.Error)
+					isCancellable := e.IsAbortable(hedgeExec, result.Result, result.Error)
 					if (isFinalResult || isCancellable) && resultSent.CompareAndSwap(false, true) {
 						resultChan <- &execResult{result, execIdx}
 					}

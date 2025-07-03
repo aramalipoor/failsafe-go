@@ -36,7 +36,9 @@ type FailurePolicyBuilder[S any, R any] interface {
 	HandleResult(result R) S
 
 	// HandleIf specifies that a failure has occurred if the predicate matches the execution result or error.
-	HandleIf(predicate func(R, error) bool) S
+	// The ExecutionAttempt parameter provides access to the execution context, allowing for context-aware failure handling
+	// such as accessing trace spans, request IDs, or other context values via exec.Context().
+	HandleIf(predicate func(exec ExecutionAttempt[R], result R, err error) bool) S
 
 	// OnSuccess registers the listener to be called when the policy determines an execution attempt was a success.
 	OnSuccess(listener func(ExecutionEvent[R])) S

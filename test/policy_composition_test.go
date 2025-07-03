@@ -357,7 +357,7 @@ func TestHedgePolicyTimeout(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
 	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](10*time.Millisecond).
-		CancelIf(func(a any, err error) bool {
+		CancelIf(func(exec failsafe.ExecutionAttempt[any], a any, err error) bool {
 			return err == nil
 		}).
 		WithMaxHedges(2), stats).

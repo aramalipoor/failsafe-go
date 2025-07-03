@@ -101,7 +101,7 @@ func (c *config[R]) HandleResult(result R) FallbackBuilder[R] {
 	return c
 }
 
-func (c *config[R]) HandleIf(predicate func(R, error) bool) FallbackBuilder[R] {
+func (c *config[R]) HandleIf(predicate func(failsafe.ExecutionAttempt[R], R, error) bool) FallbackBuilder[R] {
 	c.BaseFailurePolicy.HandleIf(predicate)
 	return c
 }

@@ -38,7 +38,7 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 				})
 			}
 
-			success := !e.IsFailure(fallbackResult, fallbackError)
+			success := !e.IsFailure(execInternal, fallbackResult, fallbackError)
 			result = &common.PolicyResult[R]{
 				Result:     fallbackResult,
 				Error:      fallbackError,

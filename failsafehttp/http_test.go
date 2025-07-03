@@ -151,7 +151,7 @@ func TestRetryPolicyFallback(t *testing.T) {
 		response.StatusCode = 200
 		response.Body = io.NopCloser(bytes.NewBufferString("fallback"))
 		return response, nil
-	}).HandleIf(func(response *http.Response, err error) bool {
+	}).HandleIf(func(exec failsafe.ExecutionAttempt[*http.Response], response *http.Response, err error) bool {
 		return (response != nil && response.StatusCode == 429) || err != nil
 	}).Build()
 

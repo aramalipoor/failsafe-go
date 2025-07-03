@@ -4,6 +4,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 )
 
@@ -19,7 +20,7 @@ var retryableStatusCodes = map[codes.Code]struct{}{
 //
 // R is the execution result type.
 func RetryPolicyBuilder[R any]() retrypolicy.RetryPolicyBuilder[R] {
-	return retrypolicy.Builder[R]().HandleIf(func(_ R, err error) bool {
+	return retrypolicy.Builder[R]().HandleIf(func(exec failsafe.ExecutionAttempt[R], _ R, err error) bool {
 		if err != nil {
 			s, ok := status.FromError(err)
 			if !ok {

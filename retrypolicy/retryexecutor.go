@@ -84,7 +84,7 @@ func (e *executor[R]) OnFailure(exec policy.ExecutionInternal[R], result *common
 	maxRetriesExceeded := e.maxRetries != -1 && e.failedAttempts.Load() > int32(e.maxRetries)
 	maxDurationExceeded := e.maxDuration != 0 && exec.ElapsedTime() > e.maxDuration
 	e.retriesExceeded.Store(maxRetriesExceeded || maxDurationExceeded)
-	isAbortable := e.IsAbortable(result.Result, result.Error)
+	isAbortable := e.IsAbortable(exec, result.Result, result.Error)
 	shouldRetry := !isAbortable && !e.retriesExceeded.Load() && e.allowsRetries()
 	done := isAbortable || !shouldRetry
 

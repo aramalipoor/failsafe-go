@@ -14,37 +14,37 @@ import (
 func TestIsFailureForNil(t *testing.T) {
 	policy := BaseFailurePolicy[any]{}
 
-	assert.False(t, policy.IsFailure(nil, nil))
+	assert.False(t, policy.IsFailure(nil, nil, nil))
 }
 
 func TestIsFailureForError(t *testing.T) {
 	policy := BaseFailurePolicy[any]{}
-	assert.True(t, policy.IsFailure(nil, errors.New("test")))
-	assert.True(t, policy.IsFailure(nil, testutil.ErrInvalidState))
+	assert.True(t, policy.IsFailure(nil, nil, errors.New("test")))
+	assert.True(t, policy.IsFailure(nil, nil, testutil.ErrInvalidState))
 
 	policy.HandleErrors(testutil.ErrInvalidArgument)
-	assert.True(t, policy.IsFailure(nil, testutil.ErrInvalidArgument))
-	assert.False(t, policy.IsFailure(nil, errors.New("test")))
+	assert.True(t, policy.IsFailure(nil, nil, testutil.ErrInvalidArgument))
+	assert.False(t, policy.IsFailure(nil, nil, errors.New("test")))
 }
 
 func TestIsFailureForResult(t *testing.T) {
 	policy := BaseFailurePolicy[any]{}
 	policy.HandleResult(10)
 
-	assert.True(t, policy.IsFailure(10, nil))
-	assert.False(t, policy.IsFailure(5, nil))
+	assert.True(t, policy.IsFailure(nil, 10, nil))
+	assert.False(t, policy.IsFailure(nil, 5, nil))
 }
 
 func TestIsFailureForPredicate(t *testing.T) {
 	policy := BaseFailurePolicy[any]{}
-	policy.HandleIf(func(result any, err error) bool {
+	policy.HandleIf(func(exec failsafe.ExecutionAttempt[any], result any, err error) bool {
 		return result == "test" || errors.Is(err, testutil.ErrInvalidArgument)
 	})
 
-	assert.True(t, policy.IsFailure("test", nil))
-	assert.False(t, policy.IsFailure(0, nil))
-	assert.True(t, policy.IsFailure(nil, testutil.ErrInvalidArgument))
-	assert.False(t, policy.IsFailure(nil, testutil.ErrInvalidState))
+	assert.True(t, policy.IsFailure(nil, "test", nil))
+	assert.False(t, policy.IsFailure(nil, 0, nil))
+	assert.True(t, policy.IsFailure(nil, nil, testutil.ErrInvalidArgument))
+	assert.False(t, policy.IsFailure(nil, nil, testutil.ErrInvalidState))
 }
 
 func TestShouldComputeDelay(t *testing.T) {
@@ -64,35 +64,35 @@ func TestShouldComputeDelay(t *testing.T) {
 func TestIsAbortableNil(t *testing.T) {
 	policy := BaseAbortablePolicy[any]{}
 
-	assert.False(t, policy.IsAbortable(nil, nil))
+	assert.False(t, policy.IsAbortable(nil, nil, nil))
 }
 
 func TestIsAbortableForError(t *testing.T) {
 	policy := BaseAbortablePolicy[any]{}
 	policy.AbortOnErrors(testutil.ErrInvalidArgument)
 
-	assert.True(t, policy.IsAbortable(nil, testutil.ErrInvalidArgument))
-	assert.True(t, policy.IsAbortable(nil, testutil.CompositeError{Cause: testutil.ErrInvalidArgument}))
-	assert.False(t, policy.IsAbortable(nil, testutil.ErrConnecting))
+	assert.True(t, policy.IsAbortable(nil, nil, testutil.ErrInvalidArgument))
+	assert.True(t, policy.IsAbortable(nil, nil, testutil.CompositeError{Cause: testutil.ErrInvalidArgument}))
+	assert.False(t, policy.IsAbortable(nil, nil, testutil.ErrConnecting))
 }
 
 func TestIsAbortableForResult(t *testing.T) {
 	policy := BaseAbortablePolicy[any]{}
 	policy.AbortOnResult(10)
 
-	assert.True(t, policy.IsAbortable(10, nil))
-	assert.False(t, policy.IsAbortable(5, nil))
-	assert.False(t, policy.IsAbortable(5, testutil.ErrInvalidState))
+	assert.True(t, policy.IsAbortable(nil, 10, nil))
+	assert.False(t, policy.IsAbortable(nil, 5, nil))
+	assert.False(t, policy.IsAbortable(nil, 5, testutil.ErrInvalidState))
 }
 
 func TestIsAbortableForPredicate(t *testing.T) {
 	policy := BaseAbortablePolicy[any]{}
-	policy.AbortIf(func(s any, err error) bool {
+	policy.AbortIf(func(exec failsafe.ExecutionAttempt[any], s any, err error) bool {
 		return s == "test" || errors.Is(err, testutil.ErrInvalidArgument)
 	})
 
-	assert.True(t, policy.IsAbortable("test", nil))
-	assert.False(t, policy.IsAbortable(0, nil))
-	assert.True(t, policy.IsAbortable("", testutil.ErrInvalidArgument))
-	assert.False(t, policy.IsAbortable("", testutil.ErrInvalidState))
+	assert.True(t, policy.IsAbortable(nil, "test", nil))
+	assert.False(t, policy.IsAbortable(nil, 0, nil))
+	assert.True(t, policy.IsAbortable(nil, "", testutil.ErrInvalidArgument))
+	assert.False(t, policy.IsAbortable(nil, "", testutil.ErrInvalidState))
 }

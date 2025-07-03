@@ -23,7 +23,7 @@ var (
 // to 2 times, by default. If a Retry-After header is present in the response, it will be used as a delay between
 // retries. Additional handling and delay configuration can be added to the resulting builder.
 func RetryPolicyBuilder() retrypolicy.RetryPolicyBuilder[*http.Response] {
-	retryHandleFunc := func(resp *http.Response, err error) bool {
+	retryHandleFunc := func(exec failsafe.ExecutionAttempt[*http.Response], resp *http.Response, err error) bool {
 		// Handle errors
 		if err != nil {
 			// Do not retry unsupported protocol scheme error

@@ -40,7 +40,7 @@ type HedgePolicyBuilder[R any] interface {
 	CancelOnErrorTypes(errs ...any) HedgePolicyBuilder[R]
 
 	// CancelIf specifies that any outstanding hedges should be canceled if the predicate matches the result or error.
-	CancelIf(predicate func(R, error) bool) HedgePolicyBuilder[R]
+	CancelIf(predicate func(exec failsafe.ExecutionAttempt[R], result R, err error) bool) HedgePolicyBuilder[R]
 
 	// OnHedge registers the listener to be called when a hedge is about to be attempted.
 	OnHedge(listener func(failsafe.ExecutionEvent[R]) bool) HedgePolicyBuilder[R]
@@ -130,7 +130,7 @@ func (c *config[R]) CancelOnErrorTypes(errs ...any) HedgePolicyBuilder[R] {
 	return c
 }
 
-func (c *config[R]) CancelIf(predicate func(R, error) bool) HedgePolicyBuilder[R] {
+func (c *config[R]) CancelIf(predicate func(exec failsafe.ExecutionAttempt[R], result R, err error) bool) HedgePolicyBuilder[R] {
 	c.BaseAbortablePolicy.AbortIf(predicate)
 	return c
 }
@@ -149,7 +149,7 @@ func (c *config[R]) Build() HedgePolicy[R] {
 	hCopy := *c
 	if !c.BaseAbortablePolicy.IsConfigured() {
 		// Cancel hedges by default after any result is received
-		c.AbortIf(func(r R, err error) bool {
+		c.AbortIf(func(exec failsafe.ExecutionAttempt[R], r R, err error) bool {
 			return true
 		})
 	}

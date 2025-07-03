@@ -23,7 +23,7 @@ type Executor[R any] interface {
 	PostExecute(exec ExecutionInternal[R], result *common.PolicyResult[R]) *common.PolicyResult[R]
 
 	// IsFailure returns whether the result is a failure according to the corresponding policy.
-	IsFailure(result R, err error) bool
+	IsFailure(exec ExecutionInternal[R], result R, err error) bool
 
 	// OnSuccess performs post-execution handling for a result that is considered a success according to IsFailure.
 	OnSuccess(exec ExecutionInternal[R], result *common.PolicyResult[R])
@@ -59,7 +59,7 @@ func (e *BaseExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.Poli
 }
 
 func (e *BaseExecutor[R]) PostExecute(exec ExecutionInternal[R], er *common.PolicyResult[R]) *common.PolicyResult[R] {
-	if e.Executor.IsFailure(er.Result, er.Error) {
+	if e.Executor.IsFailure(exec, er.Result, er.Error) {
 		er = e.Executor.OnFailure(exec, er.WithFailure())
 	} else {
 		er = er.WithDone(true, true)
@@ -68,9 +68,9 @@ func (e *BaseExecutor[R]) PostExecute(exec ExecutionInternal[R], er *common.Poli
 	return er
 }
 
-func (e *BaseExecutor[R]) IsFailure(result R, err error) bool {
+func (e *BaseExecutor[R]) IsFailure(exec ExecutionInternal[R], result R, err error) bool {
 	if e.BaseFailurePolicy != nil {
-		return e.BaseFailurePolicy.IsFailure(result, err)
+		return e.BaseFailurePolicy.IsFailure(exec, result, err)
 	}
 	return err != nil
 }

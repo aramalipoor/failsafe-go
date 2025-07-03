@@ -154,7 +154,7 @@ func (c *config[R]) HandleResult(result R) CircuitBreakerBuilder[R] {
 	return c
 }
 
-func (c *config[R]) HandleIf(predicate func(R, error) bool) CircuitBreakerBuilder[R] {
+func (c *config[R]) HandleIf(predicate func(failsafe.ExecutionAttempt[R], R, error) bool) CircuitBreakerBuilder[R] {
 	c.BaseFailurePolicy.HandleIf(predicate)
 	return c
 }

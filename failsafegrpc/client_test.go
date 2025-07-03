@@ -79,7 +79,7 @@ func TestClientRetryOnResult(t *testing.T) {
 	// Given
 	server := testutil.MockGrpcResponses("retry", "retry", "pong")
 	retryPolicy := RetryPolicyBuilder[*pbfixtures.PingResponse]().
-		HandleIf(func(response *pbfixtures.PingResponse, err error) bool {
+		HandleIf(func(exec failsafe.ExecutionAttempt[*pbfixtures.PingResponse], response *pbfixtures.PingResponse, err error) bool {
 			return response.Msg == "retry"
 		}).
 		Build()

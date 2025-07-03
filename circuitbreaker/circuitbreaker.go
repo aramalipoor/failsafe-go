@@ -375,7 +375,7 @@ func (cb *circuitBreaker[R]) halfOpen() {
 
 // Requires external locking.
 func (cb *circuitBreaker[R]) recordResult(result R, err error) {
-	if cb.IsFailure(result, err) {
+	if cb.IsFailure(nil, result, err) {
 		cb.recordFailure(nil)
 	} else {
 		cb.recordSuccess()

@@ -85,7 +85,8 @@ type RetryPolicyBuilder[R any] interface {
 	AbortOnErrorTypes(errs ...any) RetryPolicyBuilder[R]
 
 	// AbortIf specifies that retries should be aborted if the predicate matches the result or error.
-	AbortIf(predicate func(R, error) bool) RetryPolicyBuilder[R]
+	// The ExecutionAttempt parameter provides access to the execution context.
+	AbortIf(predicate func(exec failsafe.ExecutionAttempt[R], result R, err error) bool) RetryPolicyBuilder[R]
 
 	// ReturnLastFailure configures the policy to return the last failure result or error after attempts are exceeded,
 	// rather than returning ExceededError.
@@ -216,7 +217,7 @@ func (c *config[R]) AbortOnErrorTypes(errs ...any) RetryPolicyBuilder[R] {
 	return c
 }
 
-func (c *config[R]) AbortIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
+func (c *config[R]) AbortIf(predicate func(exec failsafe.ExecutionAttempt[R], result R, err error) bool) RetryPolicyBuilder[R] {
 	c.BaseAbortablePolicy.AbortIf(predicate)
 	return c
 }
@@ -236,7 +237,7 @@ func (c *config[R]) HandleResult(result R) RetryPolicyBuilder[R] {
 	return c
 }
 
-func (c *config[R]) HandleIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
+func (c *config[R]) HandleIf(predicate func(failsafe.ExecutionAttempt[R], R, error) bool) RetryPolicyBuilder[R] {
 	c.BaseFailurePolicy.HandleIf(predicate)
 	return c
 }

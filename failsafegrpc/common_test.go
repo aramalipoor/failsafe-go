@@ -89,7 +89,7 @@ func TestCircuitBreakerWithResult(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Given
-			cb := circuitbreaker.Builder[*pbfixtures.PingResponse]().HandleIf(func(r *pbfixtures.PingResponse, err error) bool {
+			cb := circuitbreaker.Builder[*pbfixtures.PingResponse]().HandleIf(func(exec failsafe.ExecutionAttempt[*pbfixtures.PingResponse], r *pbfixtures.PingResponse, err error) bool {
 				return r.Msg == "test"
 			}).Build()
 

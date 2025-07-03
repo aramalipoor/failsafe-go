@@ -52,6 +52,6 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 	}
 }
 
-func (e *executor[R]) IsFailure(_ R, err error) bool {
+func (e *executor[R]) IsFailure(_ policy.ExecutionInternal[R], _ R, err error) bool {
 	return err != nil && errors.Is(err, ErrExceeded)
 }
