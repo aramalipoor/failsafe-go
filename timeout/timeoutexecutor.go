@@ -45,8 +45,17 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 		})
 
 		// Store result and ctxCancel timeout context if needed
-		if result.CompareAndSwap(nil, innerFn(execInternal)) {
+		innerRes := innerFn(execInternal)
+		if result.CompareAndSwap(nil, innerRes) {
 			timer.Stop()
+		} else {
+			// Timeout already fired and published its result.
+			// Best-effort release of heavy results to avoid retaining buffers.
+			if innerRes != nil {
+				if releasable, ok := any(innerRes.Result).(interface{ Release() }); ok && releasable != nil {
+					releasable.Release()
+				}
+			}
 		}
 		return e.PostExecute(execInternal, result.Load())
 	}

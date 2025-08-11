@@ -50,14 +50,23 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 
 			if !shouldSkip {
 				// Perform execution
-				go func(hedgeExec policy.ExecutionInternal[R], execIdx int) {
-					result := innerFn(hedgeExec)
-					isFinalResult := int(resultCount.Add(1)) == int(maxHedges.Load())+1
-					isCancellable := e.IsAbortable(hedgeExec, result.Result, result.Error)
-					if (isFinalResult || isCancellable) && resultSent.CompareAndSwap(false, true) {
-						resultChan <- &execResult{result, execIdx}
-					}
-				}(executions[execIdx], execIdx)
+                go func(hedgeExec policy.ExecutionInternal[R], execIdx int) {
+                    result := innerFn(hedgeExec)
+                    isFinalResult := int(resultCount.Add(1)) == int(maxHedges.Load())+1
+                    isCancellable := e.IsAbortable(hedgeExec, result.Result, result.Error)
+                    didSend := false
+                    if (isFinalResult || isCancellable) && resultSent.CompareAndSwap(false, true) {
+                        resultChan <- &execResult{result, execIdx}
+                        didSend = true
+                    }
+
+                    // Best-effort release of loser hedge results that were not sent
+                    if !didSend && result != nil {
+                        if releasable, ok := any(result.Result).(interface{ Release() }); ok && releasable != nil {
+                            releasable.Release()
+                        }
+                    }
+                }(executions[execIdx], execIdx)
 			}
 
 			// Wait for result or hedge delay
