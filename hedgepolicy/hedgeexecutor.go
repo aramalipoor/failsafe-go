@@ -1,6 +1,7 @@
 package hedgepolicy
 
 import (
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -26,61 +27,100 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 		parentExecution := exec.(policy.ExecutionInternal[R])
 		executions := make([]policy.ExecutionInternal[R], e.maxHedges+1)
 
-		// Guard against a race between execution results
-		maxHedges := atomic.Int32{}
-		maxHedges.Store(int32(e.maxHedges))
-		resultCount := atomic.Int32{}
+		// Track actual running and completed executions
+		runningExecutions := atomic.Int32{}
+		completedExecutions := atomic.Int32{}
+		inflightExecutions := atomic.Int32{}
 		resultSent := atomic.Bool{}
 		resultChan := make(chan *execResult, 1) // Only one result is sent
 
 		for execIdx := 0; ; execIdx++ {
 			shouldSkip := false
-			// Prepare execution
-			if execIdx == 0 {
+
+			// Check onHedge before creating execution for hedges
+			if execIdx > 0 && e.onHedge != nil {
+				tempExec := parentExecution.CopyForHedge().(policy.ExecutionInternal[R])
+				if !e.onHedge(failsafe.ExecutionEvent[R]{ExecutionAttempt: tempExec.CopyWithResult(nil)}) {
+					shouldSkip = true
+				} else {
+					executions[execIdx] = tempExec
+				}
+			} else if execIdx == 0 {
 				executions[execIdx] = parentExecution.CopyForCancellable().(policy.ExecutionInternal[R])
 			} else {
 				executions[execIdx] = parentExecution.CopyForHedge().(policy.ExecutionInternal[R])
-				if e.onHedge != nil {
-					if !e.onHedge(failsafe.ExecutionEvent[R]{ExecutionAttempt: executions[execIdx].CopyWithResult(nil)}) {
-						shouldSkip = true
-						maxHedges.Store(int32(execIdx - 1))
-					}
-				}
 			}
 
 			if !shouldSkip {
-				// Perform execution
-                go func(hedgeExec policy.ExecutionInternal[R], execIdx int) {
-                    result := innerFn(hedgeExec)
-                    isFinalResult := int(resultCount.Add(1)) == int(maxHedges.Load())+1
-                    isCancellable := e.IsAbortable(hedgeExec, result.Result, result.Error)
-                    didSend := false
-                    if (isFinalResult || isCancellable) && resultSent.CompareAndSwap(false, true) {
-                        resultChan <- &execResult{result, execIdx}
-                        didSend = true
-                    }
+				runningExecutions.Add(1)
+				inflightExecutions.Add(1)
 
-                    // Best-effort release of loser hedge results that were not sent
-                    if !didSend && result != nil {
-                        if releasable, ok := any(result.Result).(interface{ Release() }); ok && releasable != nil {
-                            releasable.Release()
-                        }
-                    }
-                }(executions[execIdx], execIdx)
+				// Perform execution
+				go func(hedgeExec policy.ExecutionInternal[R], execIdx int) {
+					result := innerFn(hedgeExec)
+
+					// Decrement inflight AFTER getting result but BEFORE decision
+					remaining := inflightExecutions.Add(-1)
+
+					// Check if this is truly the final result
+					completed := completedExecutions.Add(1)
+					isFinalResult := int(completed) == int(runningExecutions.Load())
+
+					// Determine if we should send result immediately
+					shouldSend := false
+					if isFinalResult {
+						// Always send if this is the last result
+						shouldSend = true
+					} else if remaining == 0 {
+						// No other requests are running or will start
+						// Send immediately on any result (error or success) for quick retry
+						shouldSend = true
+					} else {
+						// Others are still running, only send on success (let errors wait for other attempts)
+						shouldSend = (result.Error == nil && e.IsAbortable(hedgeExec, result.Result, result.Error))
+					}
+
+					didSend := false
+					if shouldSend && resultSent.CompareAndSwap(false, true) {
+						resultChan <- &execResult{result, execIdx}
+						didSend = true
+					}
+
+					// Best-effort release of loser hedge results that were not sent
+					if !didSend && result != nil {
+						if releasable, ok := any(result.Result).(interface{ Release() }); ok && releasable != nil {
+							releasable.Release()
+						}
+					}
+				}(executions[execIdx], execIdx)
+			}
+
+			// Check if we should continue with more hedges
+			actuallyStarted := int(runningExecutions.Load())
+			if actuallyStarted == 0 && execIdx >= e.maxHedges {
+				// All hedges were skipped, return appropriate error
+				return &common.PolicyResult[R]{
+					Error: fmt.Errorf("no available upstreams for hedge execution"),
+				}
 			}
 
 			// Wait for result or hedge delay
 			var result *execResult
-			if !shouldSkip && execIdx < int(maxHedges.Load()) {
+			if !shouldSkip && execIdx < e.maxHedges {
 				timer := time.NewTimer(e.delayFunc(exec))
 				select {
 				case <-timer.C:
+					// Timer expired, continue to next hedge
 				case result = <-resultChan:
 					timer.Stop()
 				}
 			} else {
-				select {
-				case result = <-resultChan:
+				// This is the last execution or was skipped, wait for any result
+				if actuallyStarted > 0 {
+					result = <-resultChan
+				} else {
+					// Nothing running, break out
+					break
 				}
 			}
 
@@ -98,6 +138,11 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 				}
 				return result.result
 			}
+		}
+
+		// Should not reach here in normal operation, but return error if we do
+		return &common.PolicyResult[R]{
+			Error: fmt.Errorf("hedge execution ended without result"),
 		}
 	}
 }
