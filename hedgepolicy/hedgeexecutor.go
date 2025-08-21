@@ -126,6 +126,22 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 
 			// Return if parent execution is canceled
 			if canceled, cancelResult := parentExecution.IsCanceledWithResult(); canceled {
+				// Proactively cancel any outstanding attempts so underlying work is aborted promptly
+				for _, execution := range executions {
+					if execution != nil {
+						execution.Cancel(nil)
+					}
+				}
+				// Best-effort drain a pending result (if any) so senders are not held up
+				select {
+				case res := <-resultChan:
+					if res != nil && res.result != nil {
+						if releasable, ok := any(res.result.Result).(interface{ Release() }); ok && releasable != nil {
+							releasable.Release()
+						}
+					}
+				default:
+				}
 				return cancelResult
 			}
 
