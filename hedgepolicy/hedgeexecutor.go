@@ -68,13 +68,17 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 
 					// Determine if we should send result immediately
 					shouldSend := false
-					if isFinalResult {
-						// Always send if this is the last result
-						shouldSend = true
-					} else if remaining == 0 {
-						// No other requests are running or will start
-						// Send immediately on any result (error or success) for quick retry
-						shouldSend = true
+					if isFinalResult || remaining == 0 {
+						// No other executions in flight.
+						// For non-abortable errors when more hedges can still be started,
+						// hold off — the outer loop timer will fire and start the next
+						// hedge which may succeed. This prevents a fast transient error
+						// from short-circuiting before recovery hedges get a chance.
+						if result.Error != nil && execIdx < e.maxHedges && !e.IsAbortable(hedgeExec, result.Result, result.Error) {
+							shouldSend = false
+						} else {
+							shouldSend = true
+						}
 					} else {
 						// Others are still running, only send on success (let errors wait for other attempts)
 						shouldSend = (result.Error == nil && e.IsAbortable(hedgeExec, result.Result, result.Error))
