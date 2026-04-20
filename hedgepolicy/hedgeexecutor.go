@@ -110,6 +110,7 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 
 			// Wait for result or hedge delay
 			var result *execResult
+			ctxDone := parentExecution.Context().Done()
 			if !shouldSkip && execIdx < e.maxHedges {
 				timer := time.NewTimer(e.delayFunc(exec))
 				select {
@@ -117,11 +118,27 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 					// Timer expired, continue to next hedge
 				case result = <-resultChan:
 					timer.Stop()
+				case <-ctxDone:
+					// Parent canceled — let the IsCanceledWithResult check below
+					// run cleanup and return.
+					timer.Stop()
 				}
 			} else {
 				// This is the last execution or was skipped, wait for any result
 				if actuallyStarted > 0 {
-					result = <-resultChan
+					// Must be cancellation-aware: an inner goroutine may hold back
+					// shouldSend (see line ~77) expecting the outer loop to start
+					// another hedge. If the next iteration's onHedge returns false
+					// (shouldSkip=true), no further goroutines run and nobody will
+					// ever send on resultChan. Without selecting on the parent
+					// context the outer goroutine would block forever, which in
+					// turn prevents any deferred cleanup in the caller (e.g. an
+					// in-flight-request multiplexer entry) from running.
+					select {
+					case result = <-resultChan:
+					case <-ctxDone:
+						// Parent canceled — fall through to IsCanceledWithResult.
+					}
 				} else {
 					// Nothing running, break out
 					break
