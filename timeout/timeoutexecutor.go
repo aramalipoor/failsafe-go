@@ -24,8 +24,14 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
 
-		// Create child context
+		// Create child context. CopyForCancellable wraps the parent context
+		// with context.WithCancel, which registers the new context in the
+		// parent's children set. We MUST cancel it on exit — otherwise the
+		// parent retains the child indefinitely (until the parent itself is
+		// cancelled), which leaks per-request cancelCtx state when the
+		// parent is long-lived (e.g. a server connection's context).
 		execInternal = execInternal.CopyForCancellable().(policy.ExecutionInternal[R])
+		defer execInternal.Cancel(nil)
 		var result atomic.Pointer[common.PolicyResult[R]]
 		timer := time.AfterFunc(e.timeLimit, func() {
 			timeoutResult := internal.FailureResult[R](ErrExceeded)
